@@ -1,0 +1,74 @@
+local.properties
+# User-specific files
+.idea/
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/ssl/
+.idea/libraries/
+
+# Android Studio generated files
+.gradle/
+local.properties
+.DS_Store
+/build/
+.cxx/
+app/.cxx/*
+
+# Gradle files
+gradle/
+gradle-wrapper.jar
+.gradle/
+!gradle/wrapper/gradle-wrapper.properties
+
+# CMake and native files
+.externalNativeBuild/
+cmake-build-debug/
+cmake-build-release/
+CMakeLists.txt.user
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+*.h
+*.o
+*.so
+*.a
+
+# Kotlin specific files
+*.iml
+*.kotlin_module
+*.class
+
+# IntelliJ
+out/
+
+# Log files
+*.log
+
+# Android specific files
+*.apk
+*.ap_
+captures/
+outputs/
+generated/
+
+# Other generated files
+build/
+bin/
+.libs/
+*.obj
+*.lib
+*.dll
+*.pdb
+*.exe
+*.suo
+*.sdf
+*.vcxproj*
+.vscode/
+.vscode/settings.json
+
+# OS-specific files
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
