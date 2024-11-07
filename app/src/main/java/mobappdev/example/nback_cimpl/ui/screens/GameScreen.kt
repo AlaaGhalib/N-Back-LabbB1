@@ -31,15 +31,26 @@ import kotlinx.coroutines.launch
 import mobappdev.example.nback_cimpl.ui.viewmodels.GameType
 import mobappdev.example.nback_cimpl.ui.viewmodels.GameViewModel
 
+/**
+ * Composable that represents the Game Screen.
+ *
+ * It displays the game elements based on the selected game type, such as Visual or Audio.
+ * The screen also shows the user's current score and provides controls for checking if the guess is correct
+ * and navigating back to the home screen.
+ *
+ * @param navController Used to navigate between different screens.
+ * @param gameViewModel The ViewModel that holds the game state and logic.
+ */
 @Composable
 fun GameScreen(
     navController: NavController,
     gameViewModel: GameViewModel // Use the GameVM view model
 ) {
     // Collect the game state and score from the ViewModel
-    val gameState by gameViewModel.gameState.collectAsState()
-    val score by gameViewModel.score.collectAsState()
-    val gameStarted = gameState.eventValue != -1
+    val gameState by gameViewModel.gameState.collectAsState() // Observe the game state
+    val score by gameViewModel.score.collectAsState() // Observe the score
+    val gameStarted = gameState.eventValue != -1 // Check if the game has started based on the event value
+    val currentEventNumber = gameViewModel.eventHistorySize + 1 // Track the current event number in the sequence
 
     // Remember SnackbarHostState and CoroutineScope for showing feedback
     val snackBarHostState = remember { SnackbarHostState() }
@@ -50,15 +61,16 @@ fun GameScreen(
         gameViewModel.startGame()
     }
 
+    // Scaffold to structure the screen layout with a snackbar for messages
     Scaffold(
         snackbarHost = { SnackbarHost(snackBarHostState) }
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxSize() // Fill the entire available size
                 .padding(it),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.Center, // Center elements vertically
+            horizontalAlignment = Alignment.CenterHorizontally // Center elements horizontally
         ) {
             // Display score at the top if the game has started
             if (gameStarted) {
@@ -69,19 +81,26 @@ fun GameScreen(
                 ) {
                     Text(
                         text = "Score: $score",
-                        style = MaterialTheme.typography.headlineMedium
+                        style = MaterialTheme.typography.headlineMedium // Display the score prominently
                     )
                 }
+
+                // Display the current event number in the sequence
+                Text(
+                    text = "Current Event: ${currentEventNumber-1}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
             }
 
-            // Display specific UI based on the game type
+            // Display specific UI based on the game type selected by the user
             when (gameState.gameType) {
                 GameType.Visual -> {
-                    // Visual Game UI
+                    // UI for the Visual game
                     if (gameStarted) {
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            modifier = Modifier.size(350.dp),
+                            columns = GridCells.Fixed(3), // Create a 3x3 grid
+                            modifier = Modifier.size(350.dp), // Set the size of the grid
                             contentPadding = PaddingValues(8.dp)
                         ) {
                             items(9) { index ->
@@ -90,10 +109,10 @@ fun GameScreen(
                                         .padding(8.dp)
                                         .size(100.dp),
                                     color = if (index == gameState.eventValue) Color.Red
-                                    else MaterialTheme.colorScheme.primaryContainer,
+                                    else MaterialTheme.colorScheme.primaryContainer, // Highlight the correct square
                                     shape = MaterialTheme.shapes.medium
                                 ) {
-                                    // Placeholder for interaction logic
+                                    // Placeholder for interaction logic if needed in the future
                                 }
                             }
                         }
@@ -101,6 +120,7 @@ fun GameScreen(
                 }
 
                 GameType.Audio -> {
+                    // UI for the Audio game
                     if (gameStarted) {
                         Text(
                             text = "Listen to the sound sequence and press 'Check Result' when ready.",
@@ -117,13 +137,11 @@ fun GameScreen(
             if (gameStarted) {
                 Button(
                     onClick = {
-                        gameViewModel.checkMatch() // Call the checkMatch function
+                        val isCorrect = gameViewModel.checkMatch() // Check if the user's guess is correct
 
                         // Show snackbar message indicating if the guess was correct or not
                         scope.launch {
-                            val message = if (gameViewModel.eventHistorySize >= gameViewModel.nBack &&
-                                gameState.eventValue == gameViewModel.gameState.value.eventValue
-                            ) {
+                            val message = if (isCorrect) {
                                 "Correct!"
                             } else {
                                 "Not Correct"
@@ -144,7 +162,7 @@ fun GameScreen(
             Button(
                 onClick = {
                     gameViewModel.resetGame() // Reset the game state before navigating back
-                    navController.popBackStack()
+                    navController.popBackStack() // Navigate back to the previous screen
                 },
                 modifier = Modifier.padding(top = 32.dp)
             ) {

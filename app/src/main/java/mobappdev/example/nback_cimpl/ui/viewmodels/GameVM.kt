@@ -23,20 +23,14 @@ import mobappdev.example.nback_cimpl.data.UserPreferencesRepository
 /**
  * This is the GameViewModel.
  *
- * It is good practice to first make an interface, which acts as the blueprint
- * for your implementation. With this interface we can create fake versions
- * of the viewmodel, which we can use to test other parts of our app that depend on the VM.
- *
- * Our viewmodel itself has functions to start a game, to specify a gametype,
- * and to check if we are having a match
+ * The viewmodel manages the state of the game, including the score, the game type, and other game-related data.
+ * It has functions to start a game, set a game type, check for matches, and reset the game.
+ * It also saves high scores for the user.
  *
  * Date: 25-08-2023
  * Version: Version 1.0
  * Author: Yeetivity
- *
  */
-
-
 interface GameViewModel {
     val gameState: StateFlow<GameState>
     val score: StateFlow<Int>
@@ -46,9 +40,10 @@ interface GameViewModel {
 
     fun setGameType(gameType: GameType)
     fun startGame()
-    fun checkMatch()
+    fun checkMatch(): Boolean // This function now returns whether the guess was correct
     fun resetGame()
 }
+
 class GameVM(
     application: Application,
     private val userPreferencesRepository: UserPreferencesRepository
@@ -56,6 +51,8 @@ class GameVM(
 
     private val _gameState = MutableStateFlow(GameState())
     private var mediaPlayer: MediaPlayer? = null
+
+    // Current state of the game
     override val gameState: StateFlow<GameState>
         get() = _gameState.asStateFlow()
 
@@ -67,6 +64,7 @@ class GameVM(
     override val highscore: StateFlow<Int>
         get() = _highscore
 
+    // Defines how many elements back the user must match in the game
     override val nBack: Int = 2
 
     private var job: Job? = null
@@ -76,9 +74,13 @@ class GameVM(
     private var events = emptyArray<Int>()
     private val eventHistory = mutableListOf<Int>()
 
+    // Get the current event history size
     override val eventHistorySize: Int
         get() = eventHistory.size
 
+    /**
+     * Resets the game state, including score and event history. Releases resources for MediaPlayer.
+     */
     override fun resetGame() {
         mediaPlayer?.release()
         job?.cancel()
@@ -86,19 +88,26 @@ class GameVM(
         eventHistory.clear()
     }
 
+    /**
+     * Sets the game type (Audio, Visual, AudioVisual) and initializes the game state accordingly.
+     */
     override fun setGameType(gameType: GameType) {
         _gameState.value = _gameState.value.copy(gameType = gameType, gameEnded = false)
     }
 
-
+    /**
+     * Starts the game by resetting the current state and generating a sequence of events based on nBack.
+     */
     override fun startGame() {
         resetGame()
         Log.d("GameVM", "Game type selected: ${gameState.value.gameType}")
         job?.cancel()
 
+        // Generate the sequence of events for the game
         events = nBackHelper.generateNBackString(10, 9, 30, nBack).toList().toTypedArray()
         Log.d("GameVM", "The following sequence was generated: ${events.contentToString()}")
 
+        // Launch the game sequence based on game type
         job = viewModelScope.launch {
             when (_gameState.value.gameType) {
                 GameType.Audio -> {
@@ -116,10 +125,13 @@ class GameVM(
             }
             _gameState.value = _gameState.value.copy(gameEnded = true)
             Log.d("GameVM", "Game has ended.")
+            saveHighScoreIfBeaten() // Save high score if beaten
         }
     }
 
-
+    /**
+     * Plays a sound based on the provided resource ID.
+     */
     private fun playSound(soundResourceId: Int) {
         mediaPlayer?.release()
         mediaPlayer = MediaPlayer.create(getApplication<Application>(), soundResourceId)
@@ -127,6 +139,9 @@ class GameVM(
         mediaPlayer?.start()
     }
 
+    /**
+     * Retrieves a sound resource ID based on an integer identifier.
+     */
     private fun getSoundResourceById(id: Int): Int {
         return when (id) {
             0 -> R.raw.a
@@ -142,42 +157,75 @@ class GameVM(
         }
     }
 
-    override fun checkMatch() {
+    /**
+     * Checks whether the current event matches the event n-back. Returns true if the guess is correct.
+     */
+    override fun checkMatch(): Boolean {
         if (eventHistory.size >= nBack) {
             val currentEvent = _gameState.value.eventValue
-            val matchEvent = eventHistory[eventHistory.size - 3]
+            val matchEvent = eventHistory[eventHistory.size - nBack]
 
             if (currentEvent == matchEvent) {
-                _score.value += 1
-                Log.d("GameVM", "Match found! Score increased to: ${_score.value}")
+                if (!_gameState.value.pointAwarded) {
+                    _score.value += 1
+                    Log.d("GameVM", "Match found! Score increased to: ${_score.value}")
+
+                    // Update the game state to indicate that the point has been awarded
+                    _gameState.value = _gameState.value.copy(pointAwarded = true)
+                    return true
+                } else {
+                    Log.d("GameVM", "Point already awarded for this match. No score increment.")
+                }
             } else {
                 _score.value = maxOf(_score.value - 1, 0)
-                Log.d("GameVM", "No match. Score decreased to: ${_score.value}")
+                Log.d("GameVM", "No match found.")
             }
         } else {
             Log.d("GameVM", "Not enough history to check for match.")
         }
+        return false
     }
 
+    /**
+     * Runs a visual game by iterating through a sequence of events and updating game state.
+     */
     private suspend fun runVisualGame(events: Array<Int>) {
         for (value in events) {
-            _gameState.value = _gameState.value.copy(eventValue = value)
-            delay(500L)
+            _gameState.value = _gameState.value.copy(eventValue = value, pointAwarded = false)
+            delay(1500L)  // Increase delay to give enough time for user input
             eventHistory.add(value)
-            delay(eventInterval - 500L)
+            delay(eventInterval - 1500L)  // The remaining time before moving to the next event
         }
     }
 
+    /**
+     * Runs an audio game by playing a sequence of sounds and updating game state.
+     */
     private suspend fun runAudioGame(events: Array<Int>) {
         for (value in events) {
-            _gameState.value = _gameState.value.copy(eventValue = value)
+            _gameState.value = _gameState.value.copy(eventValue = value, pointAwarded = false)  // Reset pointAwarded when new event starts
             playSound(getSoundResourceById(value)) // Play the corresponding sound
             eventHistory.add(value) // Track this event
             delay(eventInterval) // Wait for the next event to play
         }
     }
 
+    /**
+     * Runs an audio-visual game. Not yet implemented.
+     */
     private fun runAudioVisualGame() { /* To be implemented */ }
+
+    /**
+     * Saves the high score if the current score exceeds the saved high score.
+     */
+    private suspend fun saveHighScoreIfBeaten() {
+        if (_score.value > _highscore.value) {
+            Log.d("GameVM", "New high score achieved: ${_score.value}")
+            userPreferencesRepository.saveHighScore(_score.value)
+        }
+    }
+
+
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
@@ -197,16 +245,18 @@ class GameVM(
     }
 }
 
-// Class with the different game types
-enum class GameType{
+
+// Class representing the different game types
+enum class GameType {
     Audio,
     Visual,
     AudioVisual
 }
 
+// Data class to maintain the state of the game
 data class GameState(
-    // You can use this state to push values from the VM to your UI.
     val gameType: GameType = GameType.Visual,  // Type of the game
-    val eventValue: Int = -1,  // The value of the array string
-    val gameEnded: Boolean = false
+    val eventValue: Int = -1,  // The value of the current event
+    val gameEnded: Boolean = false,  // Flag indicating if the game has ended
+    val pointAwarded: Boolean = false  // Flag to indicate if a point has been awarded for the current check
 )
